@@ -9,6 +9,15 @@ import sys
 import time
 
 
+def comparable(value):
+    """Discard snapshot-scoped identifiers while preserving visible state."""
+    if isinstance(value, dict):
+        return {k: comparable(v) for k, v in value.items() if k not in ("snapshot_id", "ref_id")}
+    if isinstance(value, list):
+        return [comparable(v) for v in value]
+    return value
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--app', action='append', required=True, help='App to observe; repeat for multiple apps')
@@ -20,6 +29,7 @@ def main():
     if args.interval <= 0 or args.timeout <= 0:
         p.error('interval and timeout must be positive')
     stopped = False
+    previous = {}
     def stop(_signum, _frame):
         nonlocal stopped
         stopped = True
@@ -46,6 +56,14 @@ def main():
             except OSError as exc:
                 event['error'] = str(exc)
                 stopped = True
+            observation = event.get("observation", {})
+            if event.get("exit_code") == 0 and observation.get("ok"):
+                current = comparable(observation.get("data"))
+                if app in previous and previous[app] == current:
+                    continue
+                previous[app] = current
+            else:
+                previous.pop(app, None)
             print(json.dumps(event, ensure_ascii=False), flush=True)
         remaining = args.interval - (time.monotonic() - start)
         if remaining > 0 and not stopped:
