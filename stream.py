@@ -62,7 +62,7 @@ def main():
             helper = subprocess.Popen([str(helper_path)], stdout=subprocess.PIPE, text=True)
         except OSError as exc:
             p.error(str(exc))
-        print('trace is running; press ctrl-c to stop. snapshots may contain private text.', file=sys.stderr, flush=True)
+        print('trace is running; press ctrl-c to stop. input and snapshots may contain passwords or private text.', file=sys.stderr, flush=True)
     while not stopped:
         trigger = None
         if helper:
@@ -76,11 +76,15 @@ def main():
             except (ValueError, KeyError, TypeError):
                 print('Invalid input helper event', file=sys.stderr)
                 continue
+        if trigger:
+            print(json.dumps({'type': 'input', **trigger}, ensure_ascii=False), flush=True)
+            if trigger['trigger'] not in ('click', 'return', 'shortcut', 'key'):
+                continue
         start = time.monotonic()
         for app in ([app_name] if helper else args.app):
             if stopped:
                 break
-            event = {'time': datetime.datetime.now(datetime.timezone.utc).isoformat(), 'app': app}
+            event = {'type': 'snapshot', 'time': datetime.datetime.now(datetime.timezone.utc).isoformat(), 'app': app}
             if trigger:
                 event['trigger'] = trigger['trigger']
                 event['pid'] = pid
